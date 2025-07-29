@@ -51,6 +51,24 @@ internal class CommandExecutor
                     RunReadLog(term);
                     //m_command = TERM_Command.ReadLog;
                     break;
+                case "DEBUGDUMP":
+                    List<string> sortedKeys = new();
+                    var itemList = LG_LevelInteractionManager.GetAllTerminalInterfaces();
+                    foreach (var pair in itemList) sortedKeys.Add(pair.key);
+                    sortedKeys.Sort();
+                    int i = 1;
+                    foreach (var key in sortedKeys)
+                    {
+                        TerminalPlugin.Logger.LogInfo(string.Format("{0,5}: {1,-20} {2,-10} {3,-20} {4,-20} {5,-20} {6, -20}",
+                            i++,
+                            itemList[key].TerminalItemKey,
+                            itemList[key].FloorItemLocation,
+                            itemList[key].SpawnNode?.m_dimension?.DimensionIndex,
+                            itemList[key].FloorItemType,
+                            itemList[key].FloorItemStatus,
+                            itemList[key].WasCollected));
+                    }
+                    break;
                 default:
                     //m_command = TERM_Command.None;
                     term.m_command.EvaluateInput(m_command);
@@ -94,9 +112,10 @@ internal class CommandExecutor
         }
 
         int found_I = s_LogList.FindIndex(name => name.StartsWith(words[1]));
-        
+
         //Argument not found in list. Populate first log.
-        if(found_I == -1) { 
+        if (found_I == -1)
+        {
             output = $"READ {s_LogList[0]}";
         }
         else
@@ -188,16 +207,10 @@ internal class CommandExecutor
             //Search through all items and add the ones matching the dimmension and filter strings to the Internal List
             foreach (var a in LG_LevelInteractionManager.GetAllTerminalInterfaces())
             {
-                if (term.SpawnNode.m_dimension.DimensionIndex == a.value.SpawnNode.m_dimension.DimensionIndex &&
+                //bool skipDimmensionCheck = a.value.SpawnNode == null;
+                if (term.SpawnNode?.m_dimension?.DimensionIndex == a.value.SpawnNode?.m_dimension?.DimensionIndex &&
                      ItemMatchesFilter(a.value, m_args[1]) && (m_args.Length == 2 || ItemMatchesFilter(a.value, m_args[2])))
                 {
-                    //TerminalPlugin.Logger.LogInfo(string.Concat(
-                    //    a.value.TerminalItemKey, " ",
-                    //    a.value.FloorItemType, " ",
-                    //    a.value.FloorItemStatus, " ",
-                    //    a.value.FloorItemLocation, " ",
-                    //    a.value.WasCollected, " ",
-                    //    a.value.SpawnNode.m_dimension.DimensionIndex));
                     s_FoundItems.Add(a.value);
                 }
             }
