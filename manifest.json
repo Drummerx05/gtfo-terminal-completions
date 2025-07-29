@@ -1,0 +1,9 @@
+{
+    "name": "Terminal Completions",
+    "version_number": "1.0.0",
+    "website_url": "https://github.com/thunderstore-io",
+    "description": "Uses LIST to populate full Tab Completions and Asterix expansion to PING, QUERY, and READ commands.",
+    "dependencies": [
+        "BepInEx-BepInExPack_GTFO-3.2.1"
+    ]
+}
