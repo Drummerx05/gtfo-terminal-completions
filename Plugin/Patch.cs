@@ -33,7 +33,6 @@ internal class Patch
 
         string commandStr = term.m_currentLine.ToUpper();
         CommandExecutor.ExecCommand(commandStr, term);
-
         return false; //Returning true appears to trigger existing functionality
     }
 
@@ -44,6 +43,14 @@ internal class Patch
         //TerminalPlugin.Logger.LogInfo($"{__instance} {hasOffset} {offsetIndex} {character}");
         return true;
     }
+
+    //[HarmonyPatch(typeof(LG_TERM_PlayerInteracting), nameof(LG_TERM_PlayerInteracting.MoveCaretLeft))]
+    //[HarmonyPrefix]
+    //public static bool LeftCaret(ref LG_TERM_PlayerInteracting __instance, LG_TERM_PlayerInteracting.ModifierKeys modKeys)
+    //{
+    //    //TerminalPlugin.Logger.LogInfo($"{__instance} {hasOffset} {offsetIndex} {character}");
+    //    return true;
+    //}
 
 
     [HarmonyPatch(typeof(LG_ComputerTerminalCommandInterpreter), nameof(LG_ComputerTerminalCommandInterpreter.TryUpdateLineForAutoComplete))]
