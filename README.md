@@ -3,6 +3,9 @@ Allows for quick usage of the default **PING**, **QUERY**, and **READ** commands
 
 The **LIST** command is used in game to create, well... lists of items. This Mod leverages that created list to then help auto populate **PING** and **QUERY** (LOGS will create a completion list for READ)
 
+The basic commands are now "custom" commands and will fail to display correctly for anyone not running this mod. I added some experimental synchronizing capability which should
+allow parties that run the mod to share LIST completions and see command outputs from each other. It's a bit unfortunate, but the way the game seems to handle Terminal commands and output kind of limits my options.
+
 ### Tab Completion
 
 The list is used to populate entities when pressing the *Tab* key (Known as "Tab Completion").
@@ -71,3 +74,21 @@ Example:
 
 `LIST RES ^DIS`
 Lists all resources on the map, but excludes **DISINFECT**
+
+### HISTORY Expansion
+
+Added the `HIST` command which displays a list of previously executed commands for that terminal
+Example:
+```
+0	LIST MED
+1   PING MEDIPACK_738
+2   LIST -CD ^RES_
+```
+Entering `!1` will automatically rerun `PING MEDIPACK_738`
+
+You can also use the beginning of a command in the expansion:
+`!LI` will rerun `LIST -CD ^RES`
+
+
+
+
