@@ -1,5 +1,6 @@
 ﻿using Il2CppSystem.Data;
 using LevelGeneration;
+using System.Numerics;
 using static RootMotion.FinalIK.IKSolverVR;
 
 namespace TerminalCompletion.Plugin;
@@ -65,11 +66,10 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
 
 ";
 
-    public readonly static string commandId = Guid.NewGuid().ToString()[..15]; //The params have a length limit
-    private readonly static Dictionary<string, List<iTerminalItem>> s_FoundLists = new();
+    private readonly static Dictionary<string, List<iTerminalItem>> terminalDataMap = new();
     private readonly static TermItemKeyComparer m_sortByKey = new();
     private readonly static TermItemZoneComparer m_sortByZone = new();
-    private static List<iTerminalItem> s_FoundItems = new();
+    private static List<iTerminalItem> currentTerminalListData = new();
     private readonly static List<string> s_LogList = new();
     private readonly static Il2CppSystem.Collections.Generic.List<string> m_genericListDefaults = new();
 
@@ -78,99 +78,73 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
     //private static TERM_Command m_command = TERM_Command.None;
     private static bool m_enableBulkQuery = true;
     private static float m_bulkDelayPerEntry = 0.5f;
-    private static bool m_executedByMe = true;
+
+    public static bool EnableModBehavior = true;
+    public static bool EnableDebugOutput = false;
 
     public static void ClearAllData()
     {
-        s_FoundLists.Clear();
-        s_FoundItems.Clear();
+        terminalDataMap.Clear();
+        currentTerminalListData.Clear();
         s_LogList.Clear();
         m_command = string.Empty;
         m_args = Array.Empty<string>();
     }
 
-    public static void ExecCommand(LG_ComputerTerminal term, string command, bool executedByMe = true)
+    public static void ExecCommand(LG_ComputerTerminal term, string command)
     {
         //Maintain lists separately for each terminal.
-        if (s_FoundLists.ContainsKey(term.ItemKey))
+        if (terminalDataMap.ContainsKey(term.ItemKey))
         {
-            s_FoundItems = s_FoundLists[term.ItemKey];
+            currentTerminalListData = terminalDataMap[term.ItemKey];
         }
         else
         {
-            s_FoundItems = new();
-            s_FoundLists[term.ItemKey] = s_FoundItems;
+            currentTerminalListData = new();
+            terminalDataMap[term.ItemKey] = currentTerminalListData;
         }
 
-        m_executedByMe = executedByMe;
         m_command = command;
         m_args = command.Split(" ", StringSplitOptions.RemoveEmptyEntries);
 
         if (m_args.Length > 0)
         {
             //Execute History Command
-            if (m_args[0][0] == '!')
+
+
+            switch (m_args[0])
             {
-                RunFromHistory(term, m_args[0][1..]);
+                case "LIST":
+                case "LS":
+                    RunList(term);
+                    break;
+                case "HIST":
+                    RunHist(term);
+                    break;
+                case "QUERY":
+                    // m_command = TERM_Command.Query;
+                    RunQuery(term);
+                    break;
+                case "TC":
+                    RunTCSetCommand(term);
+                    break;
+                default:
+                    break;
             }
-            else 
-                switch (m_args[0])
-                {
-                    //case "!LIST":
-                    //case "!LS":
-                    //    ExecCommand(term, m_lastListCommand, executedByMe);
-                    //    return;
-                    case "LIST":
-                    case "LS":
-                        //m_command = TERM_Command.ShowList;
-                        RunList(term);
-                        break;
-                    case "HIST":
-                        RunHist(term);
-                        break;
-                    case "QUERY":
-                        // m_command = TERM_Command.Query;
-                        RunQuery(term);
-                        break;
-                    case "PING":
-                        RunPing(term);
-                        //m_command = TERM_Command.Ping;
-                        break;
-                    case "LOGS":
-                        RunLogList(term);
-                        //m_command = TERM_Command.ListLogs;
-                        break;
-                    case "READ":
-                        RunReadLog(term);
-                        //m_command = TERM_Command.ReadLog;
-                        break;
-                    case "TCSET":
-                        AddToHistory(term);
-                        RunTCSetCommand(term);
-                        //term.m_command.AddCommand(TERM_Command.ShowList, "LIST", new Localization.LocalizedText("This is a LIST command"), TERM_CommandRule.Normal);
-                        break;
-                    default:
-                        //m_command = TERM_Command.None;
-                        term.m_command.EvaluateInput(m_command);
-                        break;
-                }
-        }
-        else
-        {
-            LG_ComputerTerminalManager.WantToSendTerminalCommand(term.SyncID, TERM_Command.None, m_command, string.Empty, string.Empty);
+
         }
 
-            term.m_currentLine = "";
+        term.m_currentLine = "";
     }
 
-    private static void RunFromHistory(LG_ComputerTerminal term, string histId)
+    public static string GetFromHistory(LG_ComputerTerminal term, string histId)
     {
         var historyList = term.m_command.m_inputBuffer;
         if (int.TryParse(histId, out int id))
         {
             if (id < (historyList.Count - 1))
             {
-                ExecCommand(term, historyList[id], true);
+                return historyList[id];
             }
         }
         else
@@ -179,12 +153,11 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
             {
                 if (historyList[i].StartsWith(histId))
                 {
-                    ExecCommand(term, historyList[i], true);
-                    return;
+                    return historyList[i];
                 }
             }
         }
-        
+        return "";
     }
     private static void RunTCSetCommand(LG_ComputerTerminal term)
     {
@@ -203,6 +176,13 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
                     m_bulkDelayPerEntry = delay;
                 }
                 break;
+            case "ENABLE":
+                EnableModBehavior = int.TryParse(m_args[2], out int val2) && val2 == 1;
+                break;
+            case "DEBUG":
+                EnableDebugOutput = int.TryParse(m_args[2], out int val3) && val3 == 1;
+                break;
+
         }
     }
 
@@ -300,7 +280,7 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
         for (int i = 1; i < words.Length; i++)
         {
             var word = words[i];
-            iTerminalItem? completion = s_FoundItems.Find(item => item.TerminalItemKey.StartsWith(word) && !item.WasCollected);
+            iTerminalItem? completion = currentTerminalListData.Find(item => item.TerminalItemKey.StartsWith(word) && !item.WasCollected);
             if (completion != null)
             {
                 autoCompletePerformed = word.Length != completion.TerminalItemKey.Length; //If the word has the same length as the completion, then the completion did nothing
@@ -319,7 +299,7 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
             //No auto complete was performed, so check the final word in the arg list to see whether it can be cycled to a similar item.
             //Example: List contains MEDIPACK_123 and MEDIPACK_23, so pressing Tab should swap between the two.
             string finalArg = words[^1];
-            int completionIndex = s_FoundItems.FindIndex(item => item.TerminalItemKey == finalArg && !item.WasCollected);
+            int completionIndex = currentTerminalListData.FindIndex(item => item.TerminalItemKey == finalArg && !item.WasCollected);
             if (completionIndex < 0) { return false; }
 
             int underscoreindex = finalArg.LastIndexOf('_');
@@ -328,11 +308,11 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
 
             if (finalArg.StartsWith("KEY")) baseWord = "KEY";
 
-            for (int i = (completionIndex + 1) % s_FoundItems.Count; i != completionIndex; i = (i + 1) % s_FoundItems.Count)
+            for (int i = (completionIndex + 1) % currentTerminalListData.Count; i != completionIndex; i = (i + 1) % currentTerminalListData.Count)
             {
-                if (s_FoundItems[i].TerminalItemKey.StartsWith(baseWord))
+                if (currentTerminalListData[i].TerminalItemKey.StartsWith(baseWord))
                 {
-                    words[^1] = s_FoundItems[i].TerminalItemKey;
+                    words[^1] = currentTerminalListData[i].TerminalItemKey;
                     output = string.Join(" ", words);
                     return true;
                 }
@@ -405,11 +385,11 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
     //This is a critical function that generates a list of matching items which is used for Asterix and Tab completion
     private static void RunList(LG_ComputerTerminal term)
     {
-        s_FoundItems.Clear();
+        currentTerminalListData.Clear();
         if (m_args.Length == 1)
         {
             AddToHistory(term);
-            AddLineToTerminal(term, LIST_HELP);
+            term.AddLine(LIST_HELP);
             return;
         }
 
@@ -437,7 +417,7 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
             //bool skipDimmensionCheck = a.value.SpawnNode == null;
             if (showAll || allPass || args.Count == 0)
             {
-                s_FoundItems.Add(a.value);
+                currentTerminalListData.Add(a.value);
                 itemList.Add(string.Format("<pos=0>{0}</pos><pos=25%>{1}</pos><pos=50%>{2}</pos>",
                     a.value.TerminalItemKey,
                     a.value.FloorItemType,
@@ -448,7 +428,7 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
         if (sortList)
         {
             itemList.Sort();
-            s_FoundItems.Sort(m_sortByKey);
+            currentTerminalListData.Sort(m_sortByKey);
         }
 
         AddToHistory(term);
@@ -457,14 +437,14 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
         //term.m_command.AddOutput(itemList);
         term.AddLine(TerminalLineType.ProgressWait, $"Listing items using filter {string.Join(", ", m_args, 1, m_args.Length - 1)}", 1.5f);
         term.AddLine("<pos=0>ID</pos><pos=25%>ITEM TYPE</pos><pos=50%>STATUS</pos>");
-        AddLineToTerminal(term, string.Join("\n", itemList.ToArray()));
+        term.AddLine(string.Join("\n", itemList.ToArray()));
 
     }
 
     private static void RunHist(LG_ComputerTerminal term)
     {
         Il2CppSystem.Collections.Generic.List<string> historyList = new();
-        historyList.Add("<pos=0>ID</pos><pos=15%>COMMAND</pos>\n");
+        historyList.Add("<pos=0>ID</pos><pos=7%>COMMAND</pos>\n");
 
         var buff = term.m_command.m_inputBuffer;
         for (int i = 0; i < buff.Count; i++)
@@ -472,27 +452,23 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
             historyList.Add($"<pos=0>{i}</pos><pos=7%>{buff[i]}</pos>");
         }
         historyList.Add("\nTo rerun commands use ! followed by a number or Command. Examples: \"!3\" or \"!LI\"");
-        LG_ComputerTerminalManager.WantToSendTerminalCommand(term.SyncID, TERM_Command.MAX_COUNT + 2, m_command, string.Empty, string.Empty);
+        AddEmptyLine(term);
         term.m_command.AddOutput(historyList);
     }
 
-    private static void AddLineToTerminal(LG_ComputerTerminal term, string line)
+    private static void AddEmptyLine(LG_ComputerTerminal term)
     {
-        term.AddLine(line);
-    }
-    private static void SyncronizeCommands(LG_ComputerTerminal term)
-    {
-        if (m_executedByMe)
-            LG_ComputerTerminalManager.WantToSendTerminalCommand(term.SyncID, TERM_Command.MAX_COUNT + 1, m_command, commandId, string.Empty);
-        else
-            LG_ComputerTerminalManager.WantToSendTerminalCommand(term.SyncID, TERM_Command.MAX_COUNT + 2, m_command, string.Empty, string.Empty);
+        //Add the executed command line. Without this the Terminal will simply overwrite the command entered with the command output.
+        term.AddLine($"\\\\Root\\{m_command}");
 
 
     }
     //Adds the current command to the in game terminal history. Press Up or Down arrows to navigate previous commands.
     private static void AddToHistory(LG_ComputerTerminal term)
     {
-        SyncronizeCommands(term);
+        AddEmptyLine(term);
+
+        //Add the executed command to the history buffer of the current terminal
         term.m_command.m_inputBuffer.Add(m_command);
         term.m_command.m_inputBufferStep = 0;
     }
@@ -529,7 +505,7 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
         if (m_args.Length == 1)
         {
             AddToHistory(term);
-            AddLineToTerminal(term, QUERY_HELP);
+            term.AddLine(QUERY_HELP);
             return;
         }
         bool sortByZone = false;
@@ -547,7 +523,7 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
             if (arg.Last() == '*')
             {
                 arg = arg.Trim('*');
-                foreach (var item in s_FoundItems)
+                foreach (var item in currentTerminalListData)
                 {
                     if (item.TerminalItemKey.StartsWith(arg))
                     {
@@ -582,7 +558,7 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
         {
             foreach (var item in matchingItems)
             {
-                term.m_command.EvaluateInput($"QUERY {item.TerminalItemKey}");
+                term.m_command.Query(item.TerminalItemKey, "");
             }
         }
 
@@ -604,7 +580,7 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
             if (arg.Last<char>() == '*')
             {
                 arg = arg.Trim('*');
-                foreach (var item in s_FoundItems)
+                foreach (var item in currentTerminalListData)
                 {
                     if (item.TerminalItemKey.StartsWith(arg))
                         term.m_command.EvaluateInput($"PING {item.TerminalItemKey}");
@@ -618,37 +594,40 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
 
     }
 
-    private static void RunLogList(LG_ComputerTerminal term)
+    public static void RunLogList(LG_ComputerTerminal term)
     {
-        if (m_executedByMe)
+
+        s_LogList.Clear();
+        //s_LogList.Add("EXAMPLE_LOG_1.LOG");
+        //s_LogList.Add("EXAMPLE_LOG_2.LOG");
+        foreach (var pair in term.GetLocalLogs())
         {
-            s_LogList.Clear();
-            //s_LogList.Add("EXAMPLE_LOG_1.LOG");
-            //s_LogList.Add("EXAMPLE_LOG_2.LOG");
-            foreach (var pair in term.GetLocalLogs())
-            {
-                s_LogList.Add(pair.key);
-            }
+            s_LogList.Add(pair.key);
         }
-        term.m_command.EvaluateInput(m_command);
+
+        m_command = term.m_currentLine;
+        //AddEmptyLine(term);
+
+        term.m_command.ListLogs();
+
+        //term.m_command.EvaluateInput(m_command);
 
     }
 
-    private static void RunReadLog(LG_ComputerTerminal term)
+    public static void RunReadLog(LG_ComputerTerminal term, string param)
     {
-        if (m_args.Length == 2)
+        m_command = term.m_currentLine;
+        //AddEmptyLine(term);
+        if (param.Last() == '*')
         {
-            var arg = m_args[1];
-            if (arg.Last<char>() == '*')
-            {
-                arg = arg.Trim('*');
-            }
-            var logName = s_LogList.Find(log => log.Contains(arg));
-            term.m_command.EvaluateInput($"READ {logName}");
+            param = param.Trim('*');
+
+            var logName = s_LogList.Find(log => log.Contains(param));
+            term.m_command.ReadLog(logName ?? param);
         }
         else
         {
-            term.m_command.EvaluateInput(m_command);
+            term.m_command.ReadLog(param);
         }
     }
 

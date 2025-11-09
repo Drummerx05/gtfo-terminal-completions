@@ -11,9 +11,9 @@ namespace TerminalCompletion.Plugin;
 [BepInPlugin(Guid, Name, Version)]
 public class TerminalPlugin : BasePlugin
 {
-    public const string Guid = "Drummerx04.TerminalExpansionPlugin";
-    public const string Name = "TerminalExpansionPlugin";
-    public const string Version = "1.1.0";
+    public const string Guid = "Drummerx04.TerminalCompletionPlugin";
+    public const string Name = "TerminalCompletionPlugin";
+    public const string Version = "1.2.0";
 
     public TerminalPlugin() { Logger = Log; }
 
