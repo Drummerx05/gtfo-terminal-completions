@@ -1,6 +1,7 @@
 ﻿using Il2CppSystem.Data;
 using LevelGeneration;
 using System.Numerics;
+using System.Reflection.Metadata;
 using static RootMotion.FinalIK.IKSolverVR;
 
 namespace TerminalCompletion.Plugin;
@@ -46,7 +47,6 @@ Providing a number will be treated as a Zone Number.
 Filters can include ITEM TYPE and STATUS
 
 Example: LIST 49 RES ^TOOL, will list all items in ZONE_49 that are a resource pack but not a TOOL pack.
-
 ";
     private static readonly string QUERY_HELP =
         @"Extract extra information about objects.
@@ -63,7 +63,6 @@ be pulled from the previously run LIST command.
 
 Example:
 QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list command).
-
 ";
 
     private readonly static Dictionary<string, List<iTerminalItem>> terminalDataMap = new();
@@ -82,6 +81,9 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
     public static bool EnableModBehavior = true;
     public static bool EnableDebugOutput = false;
 
+    public const TERM_Command TCCommandId = TERM_Command.MAX_COUNT + 1;
+
+
     public static void ClearAllData()
     {
         terminalDataMap.Clear();
@@ -89,6 +91,22 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
         s_LogList.Clear();
         m_command = string.Empty;
         m_args = Array.Empty<string>();
+    }
+
+    private static void AddCommandLine(LG_ComputerTerminal term)
+    {
+        //Add the entered command into the Terminal feed.
+        //false is needed to prevent extra newlines per AddLine() call.
+        term.AddLine($"\\\\Root\\{m_command}", false);
+    }
+
+    //Adds the current command to the in game terminal history. Press Up or Down arrows to navigate previous commands.
+    private static void AddToHistory(LG_ComputerTerminal term)
+    {
+        AddCommandLine(term);
+        //Add the executed command to the history buffer of the current terminal
+        term.m_command.m_inputBuffer.Add(m_command);
+        term.m_command.m_inputBufferStep = 0;
     }
 
     public static void ExecCommand(LG_ComputerTerminal term, string command)
@@ -109,31 +127,43 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
 
         if (m_args.Length > 0)
         {
-            //Execute History Command
-
-
             switch (m_args[0])
             {
                 case "LIST":
                 case "LS":
+                    AddCommandLine(term);
                     RunList(term);
                     break;
                 case "HIST":
+                    AddCommandLine(term);
                     RunHist(term);
                     break;
+                case "LOGS":
+                    AddCommandLine(term);
+                    RunLogList(term);
+                    break;
+                case "READ":
+                    AddCommandLine(term);
+                    RunReadLog(term);
+                    break;
                 case "QUERY":
-                    // m_command = TERM_Command.Query;
+                    AddCommandLine(term);
                     RunQuery(term);
                     break;
                 case "TC":
+                    AddToHistory(term);
                     RunTCSetCommand(term);
+                    break;
+                case "START":
+                    AddCommandLine(term);
+                    RunEasterEggs(term);
                     break;
                 default:
                     break;
             }
 
         }
-
+        
         term.m_currentLine = "";
     }
 
@@ -161,7 +191,7 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
     }
     private static void RunTCSetCommand(LG_ComputerTerminal term)
     {
-        if (m_args.Count() < 2) { return; }
+        if (m_args.Length < 2) { return; }
         switch (m_args[1])
         {
             case "DUMP":
@@ -388,7 +418,6 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
         currentTerminalListData.Clear();
         if (m_args.Length == 1)
         {
-            AddToHistory(term);
             term.AddLine(LIST_HELP);
             return;
         }
@@ -431,12 +460,8 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
             currentTerminalListData.Sort(m_sortByKey);
         }
 
-        AddToHistory(term);
-        //term.m_command.AddOutput(TerminalLineType.ProgressWait, $"Listing items using filter {string.Join(", ", m_args, 1, m_args.Length - 1)}", 1.5f);
-        //term.m_command.AddOutput(string.Format("{0,-35}{1,-35}{2}", "ID", "ITEM TYPE", "STATUS"));
-        //term.m_command.AddOutput(itemList);
         term.AddLine(TerminalLineType.ProgressWait, $"Listing items using filter {string.Join(", ", m_args, 1, m_args.Length - 1)}", 1.5f);
-        term.AddLine("<pos=0>ID</pos><pos=25%>ITEM TYPE</pos><pos=50%>STATUS</pos>");
+        term.AddLine("\n<pos=0>ID</pos><pos=25%>ITEM TYPE</pos><pos=50%>STATUS</pos>");
         term.AddLine(string.Join("\n", itemList.ToArray()));
 
     }
@@ -452,25 +477,7 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
             historyList.Add($"<pos=0>{i}</pos><pos=7%>{buff[i]}</pos>");
         }
         historyList.Add("\nTo rerun commands use ! followed by a number or Command. Examples: \"!3\" or \"!LI\"");
-        AddEmptyLine(term);
         term.m_command.AddOutput(historyList);
-    }
-
-    private static void AddEmptyLine(LG_ComputerTerminal term)
-    {
-        //Add the executed command line. Without this the Terminal will simply overwrite the command entered with the command output.
-        term.AddLine($"\\\\Root\\{m_command}");
-
-
-    }
-    //Adds the current command to the in game terminal history. Press Up or Down arrows to navigate previous commands.
-    private static void AddToHistory(LG_ComputerTerminal term)
-    {
-        AddEmptyLine(term);
-
-        //Add the executed command to the history buffer of the current terminal
-        term.m_command.m_inputBuffer.Add(m_command);
-        term.m_command.m_inputBufferStep = 0;
     }
 
     private static void RunBulkQuery(LG_ComputerTerminal term, List<iTerminalItem> items)
@@ -494,7 +501,6 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
 
         }
 
-        AddToHistory(term);
         term.m_command.AddOutput(TerminalLineType.ProgressWait, $"Bulk Query On: {string.Join(", ", m_args, 1, m_args.Length - 1)}", m_bulkDelayPerEntry * Math.Min(items.Count, 8));
         term.m_command.AddOutput(AllDetails);
 
@@ -504,7 +510,6 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
     {
         if (m_args.Length == 1)
         {
-            AddToHistory(term);
             term.AddLine(QUERY_HELP);
             return;
         }
@@ -564,6 +569,44 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
 
     }
 
+
+    private static readonly List<string> m_specialCommands = new()
+    {
+        "GTFO.EXE",
+        "DENOFWOLVES.EXE",
+        "PRIVATE_ENCRYPTION.EXE",
+        "LIGHT_TESTING.EXE",
+        "VENTILATION_OVERRIDE.EXE",
+        "AMMO_QUALITY_CONTROL.EXE MINIMUM",
+        "AMMO_QUALITY_CONTROL.EXE MAXIMUM",
+        "THREAT_LEVEL_M.EXE",
+        "SPAGHETTI_&_MEATBALLS.EXE",
+        "FRIED_CHICKEN.EXE",
+        "RASCAL.EXE"
+    };
+    private static void RunEasterEggs(LG_ComputerTerminal term)
+    {
+        if (m_args.Length == 1)
+        {
+
+            term.AddLine("<pos=0>ID</pos><pos=7%>EASTEREGG</pos>");
+            for (int i = 0; i < m_specialCommands.Count; i++)
+                term.AddLine($"<pos=0>{i}</pos><pos=7%>{m_specialCommands[i]}</pos>", false);
+
+            term.m_command.AddOutput("\nRun \"START [number]\", to run easter egg commands.");
+        }
+        else if (int.TryParse(m_args[1], out int val) && val < m_specialCommands.Count)
+        {
+            var words = m_specialCommands[val].Split(" ");
+            term.m_command.StartProgramFile(words[0], words.Length == 2 ? words[1] : "");
+        }
+        else
+        {
+            term.m_command.StartProgramFile(m_args[1], m_args.Length == 3 ? m_args[2] : "");
+        }
+
+    }
+
     private static void RunPing(LG_ComputerTerminal term)
     {
         if (m_args.Length == 1)
@@ -604,21 +647,16 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
         {
             s_LogList.Add(pair.key);
         }
-
-        m_command = term.m_currentLine;
-        //AddEmptyLine(term);
-
         term.m_command.ListLogs();
 
         //term.m_command.EvaluateInput(m_command);
 
     }
 
-    public static void RunReadLog(LG_ComputerTerminal term, string param)
+    private static void RunReadLog(LG_ComputerTerminal term)
     {
-        m_command = term.m_currentLine;
-        //AddEmptyLine(term);
-        if (param.Last() == '*')
+        string param = m_args.Length >=2 ? m_args[1] : "";
+        if (param != "" && param[^1] == '*')
         {
             param = param.Trim('*');
 

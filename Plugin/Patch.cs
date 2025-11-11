@@ -36,14 +36,11 @@ internal class Patch
         {
             case TERM_Command.ShowList:
             case TERM_Command.Query:
-            case TERM_Command.MAX_COUNT + 1:
-                CommandExecutor.ExecCommand(__instance, inputLine);
-                return false;
+            case TERM_Command.Start:
             case TERM_Command.ListLogs:
-                CommandExecutor.RunLogList(__instance);
-                return false;
             case TERM_Command.ReadLog:
-                CommandExecutor.RunReadLog(__instance, param1);
+            case CommandExecutor.TCCommandId:
+                CommandExecutor.ExecCommand(__instance, inputLine);
                 return false;
             default:
                 return true;
@@ -63,7 +60,6 @@ internal class Patch
             term.m_currentLine = CommandExecutor.GetFromHistory(term, term.m_currentLine[1..]);
         }
 
-
         //CommandExecutor.ExecCommand(__instance.m_terminal, __instance.m_terminal.m_currentLine.ToUpper());
         var words = term.m_currentLine.Split(" ", StringSplitOptions.RemoveEmptyEntries);
         if (words.Length > 0)
@@ -77,7 +73,7 @@ internal class Patch
             if (!CommandExecutor.EnableModBehavior) { return true; }
             if (words[0] == ("HIST"))
             {
-                LG_ComputerTerminalManager.WantToSendTerminalCommand(term.SyncID, TERM_Command.MAX_COUNT + 1, term.m_currentLine, string.Empty, string.Empty);
+                LG_ComputerTerminalManager.WantToSendTerminalCommand(term.SyncID, CommandExecutor.TCCommandId, term.m_currentLine, string.Empty, string.Empty);
                 return false;
             }
             else if (words[0] == ("LS"))
