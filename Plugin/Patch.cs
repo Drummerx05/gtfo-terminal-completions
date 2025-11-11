@@ -55,10 +55,18 @@ internal class Patch
     {
         LG_ComputerTerminal term = __instance.m_terminal;
 
-        if (CommandExecutor.EnableModBehavior && term.m_currentLine.StartsWith('!'))
+        if (CommandExecutor.EnableModBehavior)
         {
-            term.m_currentLine = CommandExecutor.GetFromHistory(term, term.m_currentLine[1..]);
+            if (term.m_currentLine.StartsWith('!')) 
+            { 
+                term.m_currentLine = CommandExecutor.GetFromHistory(term, term.m_currentLine[1..]);
+            }else if (term.m_currentLine.StartsWith('@'))
+            {
+                term.m_currentLine = CommandExecutor.GetFromHistory(term, term.m_currentLine[1..]);
+                return false;
+            }
         }
+
 
         //CommandExecutor.ExecCommand(__instance.m_terminal, __instance.m_terminal.m_currentLine.ToUpper());
         var words = term.m_currentLine.Split(" ", StringSplitOptions.RemoveEmptyEntries);
@@ -79,11 +87,7 @@ internal class Patch
             else if (words[0] == ("LS"))
             {
                 words[0] = "LIST";
-                LG_ComputerTerminalManager.WantToSendTerminalCommand(term.SyncID, TERM_Command.ShowList, string.Join(" ", words),
-                    words.Length >= 2 ? words[1] : string.Empty,
-                    words.Length >= 3 ? words[2] : string.Empty
-                    );
-                return false;
+                term.m_currentLine = string.Join(' ', words);
             }
         }
         return true; //Returning true appears to trigger existing functionality

@@ -13,7 +13,7 @@ public class TerminalPlugin : BasePlugin
 {
     public const string Guid = "Drummerx04.TerminalCompletionPlugin";
     public const string Name = "TerminalCompletionPlugin";
-    public const string Version = "1.2.1";
+    public const string Version = "1.2.2";
 
     public TerminalPlugin() { Logger = Log; }
 

@@ -3,8 +3,8 @@ Allows for quick usage of the default **PING**, **QUERY**, and **READ** commands
 
 The **LIST** command is used in game to create, well... lists of items. This Mod leverages that created list to then help auto populate **PING** and **QUERY** (LOGS will create a completion list for READ)
 
-The basic commands are now "custom" commands and will fail to display correctly for anyone not running this mod. I added some experimental synchronizing capability which should
-allow parties that run the mod to share LIST completions and see command outputs from each other. It's a bit unfortunate, but the way the game seems to handle Terminal commands and output kind of limits my options.
+The outputs seen by modded and non-modded clients will not match due to the way command syncronization occurs. The normal command channels are mostly respected though, 
+so if you or a teammate runs a non-modded command, then your terminal output should line up correctly.
 
 ### Tab Completion
 
@@ -31,6 +31,14 @@ Then pressing *Tab* multiple times will simply cycle through each Item with the 
 This will work with basically any item you can **PING** or **QUERY**.
 
 ### Bulk Queries
+
+Query groups of items simultaneously.
+
+**Flags:**
+These are quick indicators to the `QUERY` command to alter its behavior.
+
+`-G`          Group the output by zone. 
+`--ONELINE`   Outputs item information on a single digestable line. Sort of like a LIST command that includes zone and resource capacity. 
 
 `LIST ZONE_49 RES`
 

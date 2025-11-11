@@ -1,7 +1,9 @@
-﻿using Il2CppSystem.Data;
+﻿using BepInEx;
+using Il2CppSystem.Data;
 using LevelGeneration;
 using System.Numerics;
 using System.Reflection.Metadata;
+using System.Text.RegularExpressions;
 using static RootMotion.FinalIK.IKSolverVR;
 
 namespace TerminalCompletion.Plugin;
@@ -54,7 +56,9 @@ Example: LIST 49 RES ^TOOL, will list all items in ZONE_49 that are a resource p
 Usage: QUERY [FLAGS...] [ITEMS...]
 
 FLAGS:
-[-G]    Group the queried items by Zone number.
+[-G]            Group the queried items by Zone number.
+[--ONELINE]     Displays ID, CAPACITY, ZONE, STATUS, within a single output line. 
+                This is effectively a 'SUPERLIST'
 
 ITEMS:
 Any full item name (MEDIPACK_732) or beginning of a name followed by an Asterix (*) 
@@ -62,7 +66,7 @@ in order to query multiple items at the same time. When using the Asterix, Items
 be pulled from the previously run LIST command.
 
 Example:
-QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list command).
+QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last LIST command).
 ";
 
     private readonly static Dictionary<string, List<iTerminalItem>> terminalDataMap = new();
@@ -163,7 +167,7 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
             }
 
         }
-        
+
         term.m_currentLine = "";
     }
 
@@ -460,9 +464,18 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
             currentTerminalListData.Sort(m_sortByKey);
         }
 
-        term.AddLine(TerminalLineType.ProgressWait, $"Listing items using filter {string.Join(", ", m_args, 1, m_args.Length - 1)}", 1.5f);
-        term.AddLine("\n<pos=0>ID</pos><pos=25%>ITEM TYPE</pos><pos=50%>STATUS</pos>");
-        term.AddLine(string.Join("\n", itemList.ToArray()));
+        //Special case where the user runs LIST BULKHEAD,
+        //this has a special interaction with the UI which auto displays bulkhead locations 
+        if (args.Count == 1 && args[0] == "BULKHEAD")
+        {
+            term.m_command.ShowList(args[0]);
+        }
+        else
+        {
+            term.AddLine(TerminalLineType.ProgressWait, $"Listing items using filter {string.Join(", ", m_args, 1, m_args.Length - 1)}", 1.5f);
+            term.AddLine("\n<pos=0>ID</pos><pos=25%>ITEM TYPE</pos><pos=50%>STATUS</pos>");
+            term.AddLine(string.Join("\n", itemList.ToArray()));
+        }
 
     }
 
@@ -479,26 +492,55 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
         historyList.Add("\nTo rerun commands use ! followed by a number or Command. Examples: \"!3\" or \"!LI\"");
         term.m_command.AddOutput(historyList);
     }
-
-    private static void RunBulkQuery(LG_ComputerTerminal term, List<iTerminalItem> items)
+    enum QueryMode
+    {
+        Standard,
+        Oneline
+    }
+    private static Regex CapRegex = new(@"([0-9]+)%", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static void RunBulkQuery(LG_ComputerTerminal term, List<iTerminalItem> items, QueryMode mode)
     {
 
         Il2CppSystem.Collections.Generic.List<string> AllDetails = new();
 
-        foreach (var item in items)
+        if (mode == QueryMode.Standard)
         {
-            var details = item.GetDetailedInfo(m_genericListDefaults);
-            //AllDetails.Add($"\n----ENTITY: {item.TerminalItemKey}----------");
-            for (int d = 0; d < details.Count; d++)
-            {
-                AllDetails.Add(details[d]);
-            }
-            if (!AllDetails[^1].StartsWith("--------"))
-            {
-                AllDetails.Add("----------------------------------------------------------------");
-            }
-            AllDetails.Add($"ID: {item.TerminalItemKey}\nITEM STATUS: {term.m_command.GetLocalizedFloorItemStatus(item.FloorItemStatus)}\nLOCATION: {item.FloorItemLocation}\n");
 
+            foreach (var item in items)
+            {
+                var details = item.GetDetailedInfo(m_genericListDefaults);
+                //AllDetails.Add($"\n----ENTITY: {item.TerminalItemKey}----------");
+                for (int d = 0; d < details.Count; d++)
+                {
+                    AllDetails.Add(details[d]);
+                }
+                if (!AllDetails[^1].StartsWith("--------"))
+                {
+                    AllDetails.Add("----------------------------------------------------------------");
+                }
+                AllDetails.Add($"ID: {item.TerminalItemKey}\nITEM STATUS: {term.m_command.GetLocalizedFloorItemStatus(item.FloorItemStatus)}\nLOCATION: {item.FloorItemLocation}\n");
+
+            }
+        }
+        else if (mode == QueryMode.Oneline)
+        {
+            AllDetails.Add("<pos=0>ID</pos><pos=25%>ZONE</pos><pos=50%>STATUS</pos>\n");
+            foreach (var item in items)
+            {
+                string cap = "";
+                var details = item.GetDetailedInfo(m_genericListDefaults);
+                foreach (var line in details)
+                {
+                    var m = CapRegex.Match(line);
+                    if (m.Success)
+                    {
+                        cap = $"- {m.Groups[0].Value}";
+                        break;
+                    }
+                }
+                AllDetails.Add($"<pos=0>{item.TerminalItemKey}</pos><pos=25%>{item.FloorItemLocation}</pos><pos=50%>{item.FloorItemStatus} {cap}</pos>");
+
+            }
         }
 
         term.m_command.AddOutput(TerminalLineType.ProgressWait, $"Bulk Query On: {string.Join(", ", m_args, 1, m_args.Length - 1)}", m_bulkDelayPerEntry * Math.Min(items.Count, 8));
@@ -514,6 +556,7 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
             return;
         }
         bool sortByZone = false;
+        QueryMode qMode = QueryMode.Standard;
         List<iTerminalItem> matchingItems = new();
         for (int i = 1; i < m_args.Length; i++)
         {
@@ -522,6 +565,11 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
             if (arg == "-G")
             {
                 sortByZone = true;
+                continue;
+            }
+            if (arg == "--ONELINE")
+            {
+                qMode = QueryMode.Oneline;
                 continue;
             }
             //If the current argument has an asterix, run {command} with each item from the List that starts with the prefix.
@@ -541,7 +589,7 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
                 //Assume that we are running the command on ANY item from this list. Only a full ID should trigger anything.
                 foreach (var item in LG_LevelInteractionManager.GetAllTerminalInterfaces())
                 {
-                    if (item.key.StartsWith(arg))
+                    if (item.key == arg)
                     {
                         matchingItems.Add(item.value);
                     }
@@ -557,7 +605,7 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
 
         if (m_enableBulkQuery)
         {
-            RunBulkQuery(term, matchingItems);
+            RunBulkQuery(term, matchingItems, qMode);
         }
         else
         {
@@ -655,7 +703,7 @@ QUERY TOOL* MED* (Queries all TOOL_REFILL and MEDIPACK from the last list comman
 
     private static void RunReadLog(LG_ComputerTerminal term)
     {
-        string param = m_args.Length >=2 ? m_args[1] : "";
+        string param = m_args.Length >= 2 ? m_args[1] : "";
         if (param != "" && param[^1] == '*')
         {
             param = param.Trim('*');
